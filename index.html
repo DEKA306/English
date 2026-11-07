@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080d18">
+  <title>PASSAGE LAB — English Trainer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="PASSAGE LAB 홈">
+        <span class="brand-mark">P</span>
+        <span>PASSAGE<span class="brand-light">LAB</span></span>
+      </a>
+      <div class="top-meta"><span class="status-dot"></span> PERSONAL TRAINING SYSTEM</div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="eyebrow">ENGLISH TRAINING / 01</div>
+        <h1>Train your <span>reading logic.</span></h1>
+        <p>문장의 흐름을 읽고, 구조를 파악하고, 정확하게 재구성해.</p>
+      </section>
+
+      <section class="dashboard">
+        <div class="stat-card">
+          <span class="stat-label">SOLVED</span>
+          <strong id="solvedCount">0</strong>
+          <span class="stat-sub">누적 풀이</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">ACCURACY</span>
+          <strong id="accuracy">0%</strong>
+          <span class="stat-sub">누적 정답률</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">PASSAGES</span>
+          <strong id="passageCount">0</strong>
+          <span class="stat-sub">등록된 지문</span>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <aside class="sidebar">
+          <div class="section-kicker">01 / SELECT</div>
+          <h2>학습 설정</h2>
+
+          <label class="field-label" for="modeSelect">문제 유형</label>
+          <select id="modeSelect" class="select-control">
+            <option value="insertion">문장 삽입</option>
+            <option value="ordering">문장 배열</option>
+          </select>
+
+          <label class="field-label" for="passageSelect">모의고사 지문</label>
+          <select id="passageSelect" class="select-control"></select>
+
+          <div class="sidebar-note">
+            <span class="note-line"></span>
+            <p>문제는 선택한 지문에서 무작위로 출제돼. 같은 지문에서도 새로운 문제를 풀 수 있어.</p>
+          </div>
+
+          <button id="newQuestionBtn" class="primary-btn full-btn">새 문제 출제 <span>→</span></button>
+        </aside>
+
+        <section class="question-area">
+          <div class="question-head">
+            <div>
+              <div class="section-kicker">02 / QUESTION</div>
+              <h2 id="questionTitle">문제를 준비하고 있어.</h2>
+            </div>
+            <span class="question-tag" id="modeTag">INSERTION</span>
+          </div>
+
+          <div id="emptyState" class="empty-state">
+            <div class="empty-symbol">01</div>
+            <h3>Ready when you are.</h3>
+            <p>왼쪽에서 지문과 문제 유형을 선택한 다음<br>새 문제 출제를 눌러 시작해.</p>
+          </div>
+
+          <div id="questionContent" hidden>
+            <div id="givenSentenceBox" class="given-box">
+              <div class="box-label">GIVEN SENTENCE</div>
+              <p id="givenSentence"></p>
+            </div>
+
+            <div id="passageBox" class="passage-box">
+              <div class="box-label">PASSAGE</div>
+              <div id="passageContent"></div>
+            </div>
+
+            <div id="orderingBox" class="ordering-box" hidden>
+              <div class="box-label">WORD BANK <span>단어를 눌러 문장을 완성해.</span></div>
+              <div id="wordBank" class="word-bank"></div>
+              <div class="box-label answer-label">YOUR SENTENCE</div>
+              <div id="answerWords" class="answer-words">
+                <span class="placeholder">선택한 단어가 여기에 표시돼.</span>
+              </div>
+              <button id="clearWordsBtn" class="text-btn">선택 초기화</button>
+            </div>
+
+            <div class="action-row">
+              <button id="submitBtn" class="primary-btn">정답 제출 <span>→</span></button>
+              <button id="nextBtn" class="secondary-btn" hidden>다음 문제</button>
+            </div>
+            <div id="feedback" class="feedback" aria-live="polite" hidden></div>
+          </div>
+        </section>
+      </section>
+      <footer>
+        <span>PASSAGE LAB</span>
+        <span>BUILT FOR CONSISTENT PRACTICE</span>
+      </footer>
+    </main>
+  </div>
+  <script src="passages.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
