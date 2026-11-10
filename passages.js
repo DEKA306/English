@@ -4,7 +4,7 @@ window.PASSAGES = [
     "date": "260920",
     "sentences": [
       "Learning games need to be what we call 'fun enough.'",
-      "Many new learning­ game developers try to design an entertaining game.",
+      "Many new learning­game developers try to design an entertaining game.",
       "Unfortunately, that often makes learning harder rather than easier.",
       "Remember, you are not creating the next great commercial game to entertain your learners; you are creating a learning game in which success will be measured by the achievement of learning outcomes.",
       "Resist the temptation to create a ton of rules, pile on different game elements, and incorporate multiple dynamics to keep player interest high.",

@@ -30,7 +30,11 @@
   let stats = loadStats();
 
   function saveStats() {
-    localStorage.setItem(storageKey, JSON.stringify(stats));
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(stats));
+    } catch (error) {
+      console.warn("학습 기록을 저장하지 못했습니다.", error);
+    }
     renderStats();
   }
 
@@ -40,7 +44,6 @@
       stats.solved
         ? Math.round(stats.correct / stats.solved * 100) + "%"
         : "0%";
-
     $("passageCount").textContent = passages.length;
   }
 
@@ -49,13 +52,11 @@
     const select = $("passageSelect");
     select.innerHTML = "";
 
-    passages.forEach((p, i) => {
+    passages.forEach((passage, index) => {
       const option = document.createElement("option");
-
-      option.value = String(i);
+      option.value = String(index);
       option.textContent =
-        `${p.date.slice(2,4)}.${p.date.slice(4,6)}.${p.date.slice(6,8)} 모의고사`;
-
+        `${passage.date.slice(2, 4)}.${passage.date.slice(4, 6)}.${passage.date.slice(6, 8)} 모의고사`;
       select.appendChild(option);
     });
   }
@@ -64,11 +65,8 @@
   function setModeUI(mode) {
     $("modeTag").textContent =
       mode === "insertion" ? "INSERTION" : "WORD ORDER";
-
     $("questionTitle").textContent =
-      mode === "insertion"
-        ? "문장 삽입 문제"
-        : "문장 배열 문제";
+      mode === "insertion" ? "문장 삽입 문제" : "문장 배열 문제";
 
     $("givenSentenceBox").hidden = mode !== "insertion";
     $("passageBox").hidden = mode !== "insertion";
@@ -86,45 +84,104 @@
 
     for (let i = result.length - 1; i > 0; i--) {
       const j = randomIndex(i + 1);
-
-      [result[i], result[j]] =
-        [result[j], result[i]];
+      [result[i], result[j]] = [result[j], result[i]];
     }
 
     return result;
   }
 
-  // 셔플 백
+  // 셔플 백에서 문항 하나 추출
   function drawFromBag(mode, passageIndex, itemCount) {
     const bagGroup = shuffleBags[mode];
 
-    // 지문별 출제 이력 관리
     if (!bagGroup[passageIndex]) {
-      bagGroup[passageIndex] = [];
+      bagGroup[passageIndex] = {
+        items: [],
+        bagNumber: 0,
+        totalDrawn: 0,
+        lastDrawn: null,
+        startQuestion: 0
+      };
     }
 
     const bag = bagGroup[passageIndex];
 
-    // 모든 문항을 소진하면 다시 섞기
-    if (bag.length === 0) {
-      const newItems = Array.from(
-        { length: itemCount },
-        (_, i) => i
+    // 현재 가방을 모두 사용했으면 새 가방 생성
+    if (bag.items.length === 0) {
+      const newItems = shuffle(
+        Array.from({ length: itemCount }, (_, index) => index)
       );
 
-      bag.push(...shuffle(newItems));
+      // pop()으로 꺼내므로 배열 마지막 요소가 다음 출제 문항이다.
+      // 직전 가방의 마지막 문항과 겹치면 새 가방의 첫 문항과 교체한다.
+      if (
+        itemCount > 1 &&
+        newItems[newItems.length - 1] === bag.lastDrawn
+      ) {
+        [newItems[0], newItems[newItems.length - 1]] =
+          [newItems[newItems.length - 1], newItems[0]];
+      }
+
+      bag.bagNumber += 1;
+      bag.startQuestion = bag.totalDrawn + 1;
+      bag.items = newItems;
     }
 
-    // 하나씩 꺼내기
-    return bag.pop();
+    const drawn = bag.items.pop();
+
+    bag.lastDrawn = drawn;
+    bag.totalDrawn += 1;
+
+    return drawn;
+  }
+
+  // 현재 가방 정보
+  function getBagInfo(mode, passageIndex, itemCount) {
+    const bag = shuffleBags[mode]?.[passageIndex];
+
+    if (!bag || bag.bagNumber === 0) return null;
+
+    return {
+      bagNumber: bag.bagNumber,
+      progress: itemCount - bag.items.length,
+      total: itemCount,
+      start: bag.startQuestion,
+      end: bag.startQuestion + itemCount - 1,
+      totalDrawn: bag.totalDrawn
+    };
+  }
+
+  // 가방 정보 화면 표시
+  function renderBagInfo() {
+    if (!current) {
+      $("bagInfo").hidden = true;
+      return;
+    }
+
+    const info = getBagInfo(
+      current.mode,
+      current.passageIndex,
+      current.passage.sentences.length
+    );
+
+    if (!info) {
+      $("bagInfo").hidden = true;
+      return;
+    }
+
+    $("bagInfo").hidden = false;
+    $("bagNumber").textContent = `BAG #${info.bagNumber}`;
+    $("bagProgress").textContent = `${info.progress} / ${info.total}`;
+    $("bagProgressBar").style.width =
+      `${info.progress / info.total * 100}%`;
+
+    $("bagRange").textContent =
+      `이번 가방 출제 범위: ${info.start}번 ~ ${info.end}번 · 전체 ${info.totalDrawn}문제 출제`;
   }
 
   // 새 문제
   function newQuestion() {
-    const passageIndex = Number(
-      $("passageSelect").value
-    );
-
+    const passageIndex = Number($("passageSelect").value);
     const passage = passages[passageIndex];
 
     if (!passage || !passage.sentences.length) return;
@@ -134,12 +191,9 @@
     submitted = false;
     selectedSlot = null;
     chosenWords = [];
+    shuffledWords = [];
 
-    current = {
-      passage,
-      passageIndex,
-      mode
-    };
+    current = { passage, passageIndex, mode };
 
     $("emptyState").hidden = true;
     $("questionContent").hidden = false;
@@ -149,7 +203,6 @@
 
     setModeUI(mode);
 
-    // 문장 삽입 문제
     if (mode === "insertion") {
       const answer = drawFromBag(
         "insertion",
@@ -165,12 +218,8 @@
       current.remaining = sentences;
 
       $("givenSentence").textContent = given;
-
       renderInsertion();
-    }
-
-    // 문장 배열 문제
-    else {
+    } else {
       const sentenceIndex = drawFromBag(
         "ordering",
         passageIndex,
@@ -178,32 +227,25 @@
       );
 
       const sentence = passage.sentences[sentenceIndex];
-
       const words = sentence.trim().split(/\s+/);
-
       let mixed = shuffle(words);
 
-      // 원래 순서와 같을 경우 순서 변경
+      // 원래 순서와 똑같이 섞였으면 순서를 한 칸 이동한다.
       if (
         words.length > 1 &&
-        mixed.every((word, i) => word === words[i])
+        mixed.every((word, index) => word === words[index])
       ) {
-        mixed = [
-          ...mixed.slice(1),
-          mixed[0]
-        ];
+        mixed = [...mixed.slice(1), mixed[0]];
       }
 
       current.answer = words;
       current.sentenceIndex = sentenceIndex;
-
-      shuffledWords = mixed.map((word, id) => ({
-        id,
-        word
-      }));
+      shuffledWords = mixed.map((word, id) => ({ id, word }));
 
       renderWordOrder();
     }
+
+    renderBagInfo();
   }
 
   // 문장 삽입 렌더링
@@ -211,83 +253,72 @@
     const container = $("passageContent");
     container.innerHTML = "";
 
-    const addSlot = (index) => {
-      const button = document.createElement("button");
+    if (!submitted) {
+      const addSlot = (index) => {
+        const button = document.createElement("button");
+        button.className =
+          "insert-slot" + (selectedSlot === index ? " selected" : "");
+        button.type = "button";
+        button.innerHTML =
+          `<span class="slot-number">${String(index).padStart(2, "0")}</span>` +
+          `<span>이 위치에 문장 삽입</span>`;
 
-      button.className =
-        "insert-slot" +
-        (selectedSlot === index ? " selected" : "");
+        button.addEventListener("click", () => {
+          selectedSlot = index;
+          renderInsertion();
+        });
 
-      button.type = "button";
+        container.appendChild(button);
+      };
 
-      button.innerHTML =
-        `<span class="slot-number">${String(index).padStart(2,"0")}</span>` +
-        `<span>이 위치에 문장 삽입</span>`;
+      current.remaining.forEach((sentence, index) => {
+        addSlot(index);
 
-      button.disabled = submitted;
-
-      button.addEventListener("click", () => {
-        selectedSlot = index;
-        renderInsertion();
-      });
-
-      container.appendChild(button);
-    };
-
-    current.remaining.forEach((sentence, i) => {
-      addSlot(i);
-
-      const line = document.createElement("div");
-      line.className = "passage-line";
-
-      const num = document.createElement("span");
-      num.className = "line-number";
-      num.textContent = String(i + 1).padStart(2, "0");
-
-      const text = document.createElement("span");
-      text.className = "line-text";
-      text.textContent = sentence;
-
-      line.append(num, text);
-      container.appendChild(line);
-    });
-
-    addSlot(current.remaining.length);
-
-    // 정답 제출 후 원래 순서 표시
-    if (submitted) {
-      container.innerHTML = "";
-
-      current.passage.sentences.forEach((sentence, i) => {
         const line = document.createElement("div");
         line.className = "passage-line";
 
-        const num = document.createElement("span");
-        num.className = "line-number";
-        num.textContent = String(i + 1).padStart(2, "0");
+        const number = document.createElement("span");
+        number.className = "line-number";
+        number.textContent = String(index + 1).padStart(2, "0");
 
         const text = document.createElement("span");
         text.className = "line-text";
         text.textContent = sentence;
 
-        line.append(num, text);
-
-        if (i === current.answer) {
-          const inserted = document.createElement("div");
-
-          inserted.className = "inserted-answer";
-          inserted.textContent =
-            "정답으로 삽입되는 문장: " + current.given;
-
-          container.appendChild(inserted);
-        }
-
+        line.append(number, text);
         container.appendChild(line);
       });
+
+      addSlot(current.remaining.length);
+      return;
     }
+
+    // 제출 후 원래 지문 순서로 정답 표시
+    current.passage.sentences.forEach((sentence, index) => {
+      if (index === current.answer) {
+        const inserted = document.createElement("div");
+        inserted.className = "inserted-answer";
+        inserted.textContent = "정답 문장: " + current.given;
+        container.appendChild(inserted);
+      }
+
+      const line = document.createElement("div");
+      line.className = "passage-line";
+
+      const number = document.createElement("span");
+      number.className = "line-number";
+      number.textContent = String(index + 1).padStart(2, "0");
+
+      const text = document.createElement("span");
+      text.className = "line-text";
+      text.textContent = sentence;
+
+      line.append(number, text);
+      container.appendChild(line);
+    });
   }
 
-  // 단어 배열 렌더링
+  // 문장 배열 렌더링
   function renderWordOrder() {
     const bank = $("wordBank");
     const answer = $("answerWords");
@@ -297,19 +328,16 @@
 
     shuffledWords.forEach(item => {
       const button = document.createElement("button");
-
       button.className = "word-chip";
       button.type = "button";
       button.textContent = item.word;
-
       button.disabled =
-        submitted ||
-        chosenWords.some(x => x.id === item.id);
+        submitted || chosenWords.some(chosen => chosen.id === item.id);
 
       button.addEventListener("click", () => {
         if (
           !submitted &&
-          !chosenWords.some(x => x.id === item.id)
+          !chosenWords.some(chosen => chosen.id === item.id)
         ) {
           chosenWords.push(item);
           renderWordOrder();
@@ -321,16 +349,12 @@
 
     if (!chosenWords.length) {
       const placeholder = document.createElement("span");
-
       placeholder.className = "placeholder";
-      placeholder.textContent =
-        "선택한 단어가 여기에 표시돼.";
-
+      placeholder.textContent = "선택한 단어가 여기에 표시돼.";
       answer.appendChild(placeholder);
     } else {
       chosenWords.forEach((item, index) => {
         const button = document.createElement("button");
-
         button.className = "word-chip";
         button.type = "button";
         button.textContent = item.word;
@@ -338,8 +362,10 @@
         button.disabled = submitted;
 
         button.addEventListener("click", () => {
-          chosenWords.splice(index, 1);
-          renderWordOrder();
+          if (!submitted) {
+            chosenWords.splice(index, 1);
+            renderWordOrder();
+          }
         });
 
         answer.appendChild(button);
@@ -350,11 +376,8 @@
   // 정답 피드백
   function showFeedback(isCorrect, detail) {
     const box = $("feedback");
-
     box.hidden = false;
-    box.className =
-      "feedback " + (isCorrect ? "correct" : "wrong");
-
+    box.className = "feedback " + (isCorrect ? "correct" : "wrong");
     box.textContent =
       (isCorrect ? "정답이야. " : "오답이야. ") + detail;
   }
@@ -363,16 +386,8 @@
   function submitAnswer() {
     if (!current || submitted) return;
 
-    if (
-      current.mode === "insertion" &&
-      selectedSlot === null
-    ) {
-      showFeedback(
-        false,
-        "먼저 삽입할 위치를 선택해."
-      );
-
-      $("feedback").className = "feedback wrong";
+    if (current.mode === "insertion" && selectedSlot === null) {
+      showFeedback(false, "먼저 삽입할 위치를 선택해.");
       return;
     }
 
@@ -384,8 +399,6 @@
         false,
         `단어 ${current.answer.length - chosenWords.length}개가 더 필요해.`
       );
-
-      $("feedback").className = "feedback wrong";
       return;
     }
 
@@ -394,35 +407,32 @@
 
     if (current.mode === "insertion") {
       isCorrect = selectedSlot === current.answer;
-
       detail =
-        `정답은 ${String(current.answer).padStart(2,"0")}번 위치야.`;
-
-      renderInsertion();
+        `정답은 ${String(current.answer).padStart(2, "0")}번 위치야.`;
     } else {
-      const userWords = chosenWords.map(x => x.word);
-
+      const userWords = chosenWords.map(item => item.word);
       isCorrect = userWords.every(
-        (word, i) => word === current.answer[i]
+        (word, index) => word === current.answer[index]
       );
 
       detail = isCorrect
         ? "문장의 순서를 정확하게 맞췄어."
         : "정답 문장: " + current.answer.join(" ");
+    }
 
+    // 먼저 제출 상태를 바꾸고 화면을 다시 그린다.
+    submitted = true;
+
+    if (current.mode === "insertion") {
+      renderInsertion();
+    } else {
       renderWordOrder();
     }
 
-    submitted = true;
-
     stats.solved += 1;
-
-    if (isCorrect) {
-      stats.correct += 1;
-    }
+    if (isCorrect) stats.correct += 1;
 
     saveStats();
-
     showFeedback(isCorrect, detail);
 
     $("submitBtn").hidden = true;
@@ -430,20 +440,9 @@
   }
 
   // 이벤트 등록
-  $("newQuestionBtn").addEventListener(
-    "click",
-    newQuestion
-  );
-
-  $("nextBtn").addEventListener(
-    "click",
-    newQuestion
-  );
-
-  $("submitBtn").addEventListener(
-    "click",
-    submitAnswer
-  );
+  $("newQuestionBtn").addEventListener("click", newQuestion);
+  $("nextBtn").addEventListener("click", newQuestion);
+  $("submitBtn").addEventListener("click", submitAnswer);
 
   $("clearWordsBtn").addEventListener("click", () => {
     if (!submitted) {
@@ -457,17 +456,15 @@
       newQuestion();
     } else {
       setModeUI($("modeSelect").value);
+      $("bagInfo").hidden = true;
     }
   });
 
   $("passageSelect").addEventListener("change", () => {
-    if (current) {
-      newQuestion();
-    }
+    if (current) newQuestion();
   });
 
   // 초기 실행
   populatePassages();
   renderStats();
-
 })();
